@@ -11,8 +11,11 @@ require_once("functions/get_front_posts.php");
 require_once("functions/block_editor.php");
 // Wp-Member処理
 require_once("functions/wp-member.php");
+
 require_once 'functions/post_type_content.php';
 require_once 'functions/taxonomy_product.php';
+require_once 'functions/display_content.php';
+
 //バージョン情報を非表示
 remove_action('wp_head', 'wp_generator');
 // EditURIを非表示にする
