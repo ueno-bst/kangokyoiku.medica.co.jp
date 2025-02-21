@@ -1,0 +1,259 @@
+<?php
+//管理者以外管理画面のツールバーを非表示
+if (! current_user_can('delete_users')){
+    show_admin_bar(false);
+}
+
+//ログインしたらTOPページにリダイレクト
+function my_login_redirect( $redirect_to, $user_id ) {
+	return '/';
+}
+add_filter( 'wpmem_login_redirect', 'my_login_redirect', 10, 2 );
+
+// 会員登録画面からユーザー名を取り除く
+add_filter( 'wpmem_register_form_rows', function( $rows ) {
+	unset( $rows['username'] );
+	return $rows;
+});
+// メールアドレスからユーザー名を作成する
+add_filter( 'wpmem_pre_validate_form', function( $fields ) {
+	$parts = $fields['user_email'];
+	$fields['username'] = $parts;
+	return $fields;
+});
+
+
+// 新規登録画面のカスタマイズ
+add_action( 'wpmem_register_heading', 'my_register_heading', 10, 2 );
+function my_register_heading( $heading, $tag ){
+	if( $tag == 'new' ){
+		$heading = '';
+	}
+	return $heading;
+}
+
+//必須項目」の位置を変更する
+function my_register_form_args_req( $args ) {
+  $args = array(
+    'req_label' => '',
+    'heading_after' => '</legend>
+                          <div class="req_text">
+                            <span class="req">*</span>は必須項目になります。<br>
+                            ※お名前などの公開・非公開の設定は、コメント投稿時に反映されます。<br>
+                            ※各項目の公開・非公開は、後で変更することも可能です。
+                          </div>',
+    'row_before' => '<div class="form_custom_flex">',
+    'row_after'  => '</div>',
+  );
+return $args;
+}
+add_filter('wpmem_register_form_args', 'my_register_form_args_req', 10, 1);
+
+
+
+//登録完了時のリダイレクト
+function my_reg_redirect( $fields ) {
+  $base_url = get_home_url();
+  wp_redirect($base_url."/register-complete/");
+  exit();
+}
+add_action( 'wpmem_register_redirect', 'my_reg_redirect' );
+
+//WP MEBER 自動抽出のテキストを更新
+//https://securavita.net/wp-members_change_default_text/
+add_filter( 'wpmem_default_text', 'sv_wpmem_default_text' );
+function sv_wpmem_default_text( $text ) {
+    $text['login_heading'] = '会員ログイン';
+    $text['login_username'] = 'メールアドレス';
+    return $text;
+}
+
+
+/* comments.phpで呼び出すwp_list_commentsに指定するコールバック関数 */
+function mytheme_comment($comment, $args, $depth) {
+   $GLOBALS['comment'] = $comment; ?>
+   <li <?php comment_class(); ?> id="li-comment-<?php comment_ID() ?>">
+     <div id="comment-<?php comment_ID(); ?>">
+      <div class="comment_author vcard">
+        <?php
+        $comment_id = $comment;
+        $user_idnm = $comment_id->user_id; //投稿者のIDを取得
+        // echo $comment_id->user_id;
+        ?>
+        <?php if( $img = get_the_author_meta( 'user_prof_img', $user_idnm )): ?>
+          <?php echo get_avatar($user_idnm, 150); ?>
+        <?php else: ?>
+          <img src="<?php echo esc_url(site_url('/')); ?>img/common/user-no-image.jpg" alt="Noimage">
+        <?php endif;?>
+
+         <?php /*アバターも無効化*/ /*echo get_avatar($comment,$size='48',$default='<path_to_url>' );*/ ?>
+         <?php /*コメント投稿時指定のURLを非表示*/ /*echo get_comment_author_link( $comment_ID );*/ ?>
+         <?php /*コメント投稿時指定の投稿者名を非表示*/
+          /* printf(__('<cite class="fn">%s</cite> <span class="says">より:</span>'), get_comment_author())
+          */
+         ?>
+      </div>
+      <!-- /.comment_author -->
+      <?php if ($comment->comment_approved == '0') : ?>
+         <em><?php _e('Your comment is awaiting moderation.') ?></em>
+         <br />
+      <?php endif; ?>
+
+      <div class="comment_arrow_box">
+        <div class="comment-meta commentmetadata">
+          <p class="name"><?php the_author_meta("user_nickname",$user_idnm); ?></p>
+          <p class="comment_time"><?php printf(__('%1$s at %2$s'), get_comment_date(),  get_comment_time()) ?></p>
+        </div>
+        <?php comment_text() ?>
+      </div>
+      <!-- /.comment_arrow_box -->
+
+      <div class="reply">
+         <?php comment_reply_link(array_merge( $args, array('depth' => $depth, 'max_depth' => $args['max_depth']))) ?>
+      </div>
+     </div>
+<?php
+        }
+/* comments.phpで呼び出すwp_list_commentsに指定するコールバック関数 ここまで*/
+
+
+//プロフィール画像をアバター画像に同期
+add_filter( 'get_avatar', 'wpmem_ul_my_custom_avatar', 10, 6 );
+function wpmem_ul_my_custom_avatar( $avatar, $id_or_email, $size, $default, $alt, $args ) {
+
+    // What is the custom image field's meta key?
+    // Set this value to match the meta key of your custom image field.
+    $meta_key = "user_prof_img";
+
+    // Nothing really to change below here, unless
+    // you want to change the <img> tag HTML.
+    $user = false;
+    if ( is_numeric( $id_or_email ) ) {
+        $user = get_user_by( 'id' , (int)$id_or_email );
+    } elseif ( is_object( $id_or_email ) ) {
+        if ( ! empty( $id_or_email->user_id ) ) {
+            $id = (int)$id_or_email->user_id;
+            $user = get_user_by( 'id' , $id );
+        }
+    } else {
+        $user = get_user_by( 'email', $id_or_email );
+    }
+    if ( $user && is_object( $user ) ) {
+        $post_id = get_user_meta( $user->ID, $meta_key, true );
+        if ( $post_id ) {
+            $attachment_url = wp_get_attachment_url( $post_id );
+
+            // HTML for the avatar <img> tag.  This is WP default.
+            // $avatar = '<img alt="' . $alt . '" src="' . $attachment_url . '" class="avatar avatar-' . $size . ' photo" height="' . $size . '" width="' . $size . '" />';
+            $avatar = sprintf(
+                "<img alt='%s' src='%s' class='%s' height='%d' width='%d' %s/>",
+                esc_attr( $alt ),
+                esc_url( $attachment_url ),
+                esc_attr( "avatar avatar-" . $size . " photo" ),
+                (int) $args['height'],
+                (int) $args['width'],
+                $args['extra_attr']
+            );
+        }
+    }
+    return $avatar;
+}
+
+
+//コメントフォーム部分の表示カスタマイズ
+function comment_fields_control($defaults){
+  $current_user = wp_get_current_user('ID');
+  $user_id = $current_user->ID;
+  $user_name = get_the_author_meta( 'user_nickname', $user_id );
+  $defaults['title_reply_to'] = '返信する'; //返信時のタイトルテキスト変更
+  // $defaults['cancel_reply_link'] = 'ううう'; // 送信ボタンのラベル
+  $defaults['label_submit'] = 'コメントを送信'; // 送信ボタンのラベル
+  $defaults['logged_in_as'] = '<p class="comment_notice">※コメントはメディカ出版にて確認・承認後公開となります。</p><p class="logged-in-as">'.$user_name.'でログイン中</p>'; // 送信ボタンのラベル
+  return $defaults;
+}
+add_filter( 'comment_form_defaults', 'comment_fields_control');
+
+//登録時の利用規約のリンク先を固定ページに
+add_filter( 'wpmem_tos_link_txt', 'custom_wpmem_tos_link_txt' );
+function custom_wpmem_tos_link_txt( $text )
+{
+	$text = '</a>利用規約に同意する <a href="/terms/" target="_blank" rel="noopener" class="term_link">利用規約はこちら</a>';
+	return $text;
+}
+
+//パスワードを忘れた方へのリンク先を変更
+function my_username_link_str( $str, $link ) {
+	return "<a href=\"/forgot-user/\">ユーザー名をお忘れの方はこちら</a>";
+}
+add_filter( 'wpmem_username_link_str', 'my_username_link_str', 10, 2 );
+
+//会員登録フォームテキスト挿入用のhook
+function my_login_form_rows( $rows, $tag ){
+  // $rows['user_school_name_select']['field_after'] = '<span class="myform__notice">※学校名で検索</span></div>';
+  $rows['billing_phone']['field_after'] = '<span class="myform__notice">※ハイフンありで入力して下さい
+</span></div>';
+  $rows['tos']['row_before'] = '<div class="form_custom_flex ver_column01">';
+  $rows['tos']['field_after'] = '<p><a href="https://store.medica.co.jp/privacy.html" target="_blank" rel="noopener">個人情報の取り扱いについてはこちら</a></p></div>';
+  $rows['user_school_name_select']['row_after'] = '';
+  $rows['school_show_hidden']['row_before'] = '<div class="field_mini">';
+  $rows['school_show_hidden']['row_after'] = '</div></div>';
+  $rows['user_position']['row_after'] = '';
+  $rows['position_show_hidden']['row_before'] = '<div class="field_mini">';
+  $rows['position_show_hidden']['row_after'] = '</div></div>';
+  $rows['user_area']['row_after'] = '';
+  $rows['area_show_hidden']['row_before'] = '<div class="field_mini">';
+  $rows['area_show_hidden']['row_after'] = '</div></div>';
+  $rows['last_name']['row_before'] = '<div class="form_custom_flex ver_name"><label for="last_name" class="text">お名前<span class="req">*</span></label><div class="name_flex">';
+  $rows['last_name']['row_after'] = '';
+  $rows['first_name']['row_before'] = '';
+  $rows['first_name']['row_after'] = '</div>';
+  $rows['name_show_hidden']['row_before'] = '<div class="field_mini">';
+  $rows['name_show_hidden']['row_after'] = '</div></div>';
+	return $rows;
+}
+add_filter( 'wpmem_register_form_rows', 'my_login_form_rows', 10, 2 );
+
+
+//コメント通知をサイト管理メールアドレスだけに通知
+function se_comment_moderation_recipients( $emails, $comment_id ) {
+$emails = array( get_option( 'admin_email' ) );
+
+return $emails;
+}
+add_filter( 'comment_moderation_recipients', 'se_comment_moderation_recipients', 11, 2 );
+add_filter( 'comment_notification_recipients', 'se_comment_moderation_recipients', 11, 2 );
+
+
+
+// コメントが承認されたときに実行されるアクションフック
+add_action('wp_set_comment_status', 'send_email_on_comment_approval', 10, 2);
+function send_email_on_comment_approval($comment_id, $comment_status) {
+    // コメントが承認された場合のみ処理を実行
+    if ('approve' !== $comment_status) {
+        return;
+    }
+
+    // コメントデータを取得
+    $comment = get_comment($comment_id);
+
+    // 記事の投稿者の情報を取得
+    $post = get_post($comment->comment_post_ID);
+    $author_email = get_the_author_meta('user_email', $post->post_author);
+
+    // コメントの投稿者のメールアドレスを取得
+    $comment_author_email = $comment->comment_author_email;
+
+    // メールの内容を設定
+    $subject = 'コメントが承認されました';
+    $message = 'あなたのコメントが承認されました。記事を確認してください。';
+
+    // 記事の投稿者とコメントの投稿者にメールを送信
+    wp_mail($author_email, $subject, $message);
+    wp_mail($comment_author_email, $subject, $message);
+}
+
+//パスワードリセットの文言変更
+add_filter( 'wpmem_forgot_link_str', 'my_forgot_link_str', 10, 2 );
+function my_forgot_link_str( $str, $link ) {
+    return "パスワードを忘れた場合<a href=\"$link\" target=\"blank\">パスワード再発行</a>";
+}

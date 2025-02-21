@@ -1,0 +1,70 @@
+
+.wp-embed{
+    position: relative;
+  	padding: 20px;
+  	border: 1px solid #ccc;
+    box-sizing: border-box;
+}
+
+.wp-embed-featured-image.square {
+    width: 30%;
+    max-width: 300px;
+    margin-bottom:0px;
+}
+
+p.wp-embed-heading{
+    margin-bottom: 0.5em;
+    line-height: 1.4;
+    font-size: 18px;
+    font-weight: 500;
+    font-family: 'Noto Sans JP', sans-serif;
+}
+.wp-embed-footer {
+    display: none;
+}
+.wp-embed-excerpt p {
+    line-height: 1.8;
+}
+.wp-embed .wp-embed-more {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    padding: 0.5em 1em;
+    background-color: #3e75b9;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+}
+
+@media screen and (max-width: 766px) {
+    .wp-embed{
+    	padding: 10px 10px 35px 10px;
+    }
+
+    .wp-embed-featured-image.square {
+        width: 35%;
+        margin-right: 3%;
+    }
+
+    p.wp-embed-heading{
+        font-size: 16px;
+        line-height: 1.5;
+    }
+    .wp-embed-excerpt p {
+        font-size: 12px;
+        white-space: nowrap;
+    	overflow: hidden;
+    	text-overflow: ellipsis;
+    	-webkit-text-overflow: ellipsis;
+    	-o-text-overflow: ellipsis;
+    }
+    .wp-embed .wp-embed-more {
+        width: 100%;
+        text-align: center;
+        padding: 0.2em 1em;
+    }
+
+
+
+}

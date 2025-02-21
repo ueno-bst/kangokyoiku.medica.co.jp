@@ -1,0 +1,880 @@
+<?php
+//管理者以外管理画面のツールバーを非表示
+if (! current_user_can('delete_users')){
+    show_admin_bar(false);
+}
+
+//ログインしたらTOPページにリダイレクト
+function my_login_redirect( $redirect_to, $user_id ) {
+	return '/';
+}
+add_filter( 'wpmem_login_redirect', 'my_login_redirect', 10, 2 );
+
+// 会員登録画面からユーザー名を取り除く
+add_filter( 'wpmem_register_form_rows', function( $rows ) {
+	unset( $rows['username'] );
+	return $rows;
+});
+// メールアドレスからユーザー名を作成する
+add_filter( 'wpmem_pre_validate_form', function( $fields ) {
+	$parts = $fields['user_email'];
+	$fields['username'] = $parts;
+	return $fields;
+});
+
+
+// 新規登録画面のカスタマイズ
+add_action( 'wpmem_register_heading', 'my_register_heading', 10, 2 );
+function my_register_heading( $heading, $tag ){
+	if( $tag == 'new' ){
+		$heading = '';
+	}
+	return $heading;
+}
+
+//必須項目」の位置を変更する
+function my_register_form_args_req( $args ) {
+  $args = array(
+    'req_label' => '',
+    'heading_after' => '</legend>
+                          <div class="req_text">
+                            <span class="req">*</span>は必須項目になります。<br>
+                            ※お名前などの公開・非公開の設定は、コメント投稿時に反映されます。<br>
+                            ※各項目の公開・非公開は、後で変更することも可能です。
+                          </div>',
+    'row_before' => '<div class="form_custom_flex">',
+    'row_after'  => '</div>',
+  );
+return $args;
+}
+add_filter('wpmem_register_form_args', 'my_register_form_args_req', 10, 1);
+
+
+
+//登録完了時のリダイレクト
+function my_reg_redirect( $fields ) {
+  $base_url = get_home_url();
+  wp_redirect($base_url."/register-complete/");
+  exit();
+}
+add_action( 'wpmem_register_redirect', 'my_reg_redirect' );
+
+//WP MEBER 自動抽出のテキストを更新
+//https://securavita.net/wp-members_change_default_text/
+add_filter( 'wpmem_default_text', 'sv_wpmem_default_text' );
+function sv_wpmem_default_text( $text ) {
+    $text['login_heading'] = '会員ログイン';
+    $text['login_username'] = 'メールアドレス';
+    $text['pwdreset_button'] = 'パスワードを再発行する';
+    return $text;
+}
+
+
+
+/* comments.phpで呼び出すwp_list_commentsに指定するコールバック関数 */
+function mytheme_comment($comment, $args, $depth) {
+   $GLOBALS['comment'] = $comment; ?>
+   <li <?php comment_class(); ?> id="li-comment-<?php comment_ID() ?>">
+     <div id="comment-<?php comment_ID(); ?>">
+      <div class="comment_author vcard">
+        <?php
+        $comment_id = $comment;
+        $user_idnm = $comment_id->user_id; //投稿者のIDを取得
+        // echo $comment_id->user_id;
+        ?>
+        <?php if( $img = get_the_author_meta( 'user_prof_img', $user_idnm )): ?>
+          <?php echo get_avatar($user_idnm, 150); ?>
+        <?php else: ?>
+          <img src="<?php echo esc_url(site_url('/')); ?>img/common/user-no-image.jpg" alt="Noimage">
+        <?php endif;?>
+
+         <?php /*アバターも無効化*/ /*echo get_avatar($comment,$size='48',$default='<path_to_url>' );*/ ?>
+         <?php /*コメント投稿時指定のURLを非表示*/ /*echo get_comment_author_link( $comment_ID );*/ ?>
+         <?php /*コメント投稿時指定の投稿者名を非表示*/
+          /* printf(__('<cite class="fn">%s</cite> <span class="says">より:</span>'), get_comment_author())
+          */
+         ?>
+      </div>
+      <!-- /.comment_author -->
+      <?php if ($comment->comment_approved == '0') : ?>
+         <em><?php _e('Your comment is awaiting moderation.') ?></em>
+         <br />
+      <?php endif; ?>
+
+      <div class="comment_arrow_box">
+        <div class="comment-meta commentmetadata">
+          <p class="name"><?php the_author_meta("user_nickname",$user_idnm); ?></p>
+          <p class="comment_time"><?php printf(__('%1$s at %2$s'), get_comment_date(),  get_comment_time()) ?></p>
+        </div>
+        <?php comment_text() ?>
+      </div>
+      <!-- /.comment_arrow_box -->
+
+      <div class="reply">
+         <?php comment_reply_link(array_merge( $args, array('depth' => $depth, 'max_depth' => $args['max_depth']))) ?>
+      </div>
+     </div>
+<?php
+        }
+/* comments.phpで呼び出すwp_list_commentsに指定するコールバック関数 ここまで*/
+
+
+//プロフィール画像をアバター画像に同期
+add_filter( 'get_avatar', 'wpmem_ul_my_custom_avatar', 10, 6 );
+function wpmem_ul_my_custom_avatar( $avatar, $id_or_email, $size, $default, $alt, $args ) {
+
+    // What is the custom image field's meta key?
+    // Set this value to match the meta key of your custom image field.
+    $meta_key = "user_prof_img";
+
+    // Nothing really to change below here, unless
+    // you want to change the <img> tag HTML.
+    $user = false;
+    if ( is_numeric( $id_or_email ) ) {
+        $user = get_user_by( 'id' , (int)$id_or_email );
+    } elseif ( is_object( $id_or_email ) ) {
+        if ( ! empty( $id_or_email->user_id ) ) {
+            $id = (int)$id_or_email->user_id;
+            $user = get_user_by( 'id' , $id );
+        }
+    } else {
+        $user = get_user_by( 'email', $id_or_email );
+    }
+    if ( $user && is_object( $user ) ) {
+        $post_id = get_user_meta( $user->ID, $meta_key, true );
+        if ( $post_id ) {
+            $attachment_url = wp_get_attachment_url( $post_id );
+
+            // HTML for the avatar <img> tag.  This is WP default.
+            // $avatar = '<img alt="' . $alt . '" src="' . $attachment_url . '" class="avatar avatar-' . $size . ' photo" height="' . $size . '" width="' . $size . '" />';
+            $avatar = sprintf(
+                "<img alt='%s' src='%s' class='%s' height='%d' width='%d' %s/>",
+                esc_attr( $alt ),
+                esc_url( $attachment_url ),
+                esc_attr( "avatar avatar-" . $size . " photo" ),
+                (int) $args['height'],
+                (int) $args['width'],
+                $args['extra_attr']
+            );
+        }
+    }
+    return $avatar;
+}
+
+
+//コメントフォーム部分の表示カスタマイズ
+function comment_fields_control($defaults){
+  $current_user = wp_get_current_user('ID');
+  $user_id = $current_user->ID;
+  $user_name = get_the_author_meta( 'user_nickname', $user_id );
+  $defaults['title_reply_to'] = '返信コメントを入力'; //返信時のタイトルテキスト変更
+  // $defaults['cancel_reply_link'] = 'ううう'; // 送信ボタンのラベル
+  $defaults['label_submit'] = 'コメントを送信'; // 送信ボタンのラベル
+  $defaults['logged_in_as'] = '<p class="comment_notice">※コメントはメディカ出版にて確認・承認後公開となります。</p><p class="logged-in-as">'.$user_name.'でログイン中</p>'; // 送信ボタンのラベル
+  return $defaults;
+}
+add_filter( 'comment_form_defaults', 'comment_fields_control');
+
+//登録時の利用規約のリンク先を固定ページに
+add_filter( 'wpmem_tos_link_txt', 'custom_wpmem_tos_link_txt' );
+function custom_wpmem_tos_link_txt( $text )
+{
+	$text = '</a>利用規約に同意する <a href="/terms/" target="_blank" rel="noopener" class="term_link">利用規約はこちら</a>';
+	return $text;
+}
+
+//パスワードを忘れた方へのリンク先を変更
+function my_username_link_str( $str, $link ) {
+	return "<a href=\"/forgot-user/\">ユーザー名をお忘れの方はこちら</a>";
+}
+add_filter( 'wpmem_username_link_str', 'my_username_link_str', 10, 2 );
+
+//会員登録フォームテキスト挿入用のhook
+function my_login_form_rows( $rows, $tag ){
+  // $rows['user_school_name_select']['field_after'] = '<span class="myform__notice">※学校名で検索</span></div>';
+  $rows['billing_phone']['field_after'] = '<span class="myform__notice">※ハイフンありで入力して下さい
+</span></div>';
+  $rows['tos']['row_before'] = '<div class="form_custom_flex ver_column01">';
+  $rows['tos']['field_after'] = '<p><a href="https://store.medica.co.jp/privacy.html" target="_blank" rel="noopener">個人情報の取り扱いについてはこちら</a></p></div>';
+  $rows['user_school_name_select']['row_after'] = '';
+  $rows['school_show_hidden']['row_before'] = '<div class="field_mini">';
+  $rows['school_show_hidden']['row_after'] = '</div></div>';
+  $rows['user_position']['row_after'] = '';
+  $rows['position_show_hidden']['row_before'] = '<div class="field_mini">';
+  $rows['position_show_hidden']['row_after'] = '</div></div>';
+  $rows['user_area']['row_after'] = '';
+  $rows['area_show_hidden']['row_before'] = '<div class="field_mini">';
+  $rows['area_show_hidden']['row_after'] = '</div></div>';
+  $rows['last_name']['row_before'] = '<div class="form_custom_flex ver_name"><label for="last_name" class="text">お名前<span class="req">*</span></label><div class="name_flex">';
+  $rows['last_name']['row_after'] = '';
+  $rows['first_name']['row_before'] = '';
+  $rows['first_name']['row_after'] = '</div>';
+  $rows['name_show_hidden']['row_before'] = '<div class="field_mini">';
+  $rows['name_show_hidden']['row_after'] = '</div></div>';
+	return $rows;
+}
+add_filter( 'wpmem_register_form_rows', 'my_login_form_rows', 10, 2 );
+
+
+//コメント通知をサイト管理メールアドレスだけに通知
+function se_comment_moderation_recipients( $emails, $comment_id ) {
+$emails = array( get_option( 'admin_email' ) );
+
+return $emails;
+}
+add_filter( 'comment_moderation_recipients', 'se_comment_moderation_recipients', 11, 2 );
+add_filter( 'comment_notification_recipients', 'se_comment_moderation_recipients', 11, 2 );
+
+
+
+// コメントが承認されたときに実行されるアクションフック
+add_action('wp_set_comment_status', 'send_email_on_comment_approval', 10, 2);
+function send_email_on_comment_approval($comment_id, $comment_status) {
+    // コメントが承認された場合のみ処理を実行
+    $comment_deny_flag = get_field('comment_delete_check', 'comment_'.$comment_id);
+    if ('approve' !== $comment_status || $comment_deny_flag) {
+        return;
+    }
+
+    // コメントデータを取得
+    $comment = get_comment($comment_id);
+
+    // 記事の投稿者の情報を取得
+    $post = get_post($comment->comment_post_ID);
+    $author_email = get_the_author_meta('user_email', $post->post_author);
+
+    // コメントの投稿者のメールアドレスを取得
+    $comment_author_email = $comment->comment_author_email;
+    $comment_author_info = get_user_by( 'email', $comment_author_email );
+    $comment_author_id = $comment_author_info->ID;
+
+    // 記事の投稿者にメールを送信
+    $subject = '【看護教育力UP↑コミュニティ】コメントがあります';
+    $message = '公開中の記事にコメントがありました。下記よりご確認ください。' . "\n";
+    $message .= get_permalink($post->ID) . "\n";
+    // ▼ 20240205 fsta ikawa update
+    // wp_mail($author_email, $subject, $message);
+    if (check_user_expireddate_by_user_id($post->post_author)) {
+        wp_mail($author_email, $subject, $message);
+    }
+    // ▼ 20240205 fsta ikawa update
+
+    // メールの内容を設定
+    if ($comment->comment_parent) {
+        $subject = '【看護教育力UP↑コミュニティ】返信投稿が承認されました';
+        $message = 'あなたの返信投稿が承認されました。下記よりご確認ください。' . "\n";
+        $message .= get_permalink($post->ID) . "\n";
+    } else {
+        $subject = '【看護教育力UP↑コミュニティ】コメントが承認されました';
+        $message = '投稿したコメントが承認されました。下記よりご確認ください。' . "\n";
+        $message .= get_permalink($post->ID) . "\n";
+    }
+
+    // コメントの投稿者にメールを送信
+    // ▼ 20240205 fsta ikawa update
+    // wp_mail($author_email, $subject, $message);
+    if (check_user_expireddate_by_user_id($post->post_author)) {
+        wp_mail($author_email, $subject, $message);
+    }
+    // ▼ 20240205 fsta ikawa update
+    $user_alert_checkbox = wpmem_get_user_meta($comment_author_id, 'user_alert_checkbox', true);
+    if (preg_match('/コメント投稿状態/', $user_alert_checkbox)) {
+        // ▼ 20240205 fsta ikawa update
+        // wp_mail($comment_author_email, $subject, $message);
+        if (check_user_expireddate_by_user_id($comment_author_id)) {
+            wp_mail($comment_author_email, $subject, $message);
+        }
+        // ▼ 20240205 fsta ikawa update
+    }
+
+    // 親コメントが有る場合、親コメントのユーザーにも送信
+    if ($comment->comment_parent) {
+        $parent_comment = get_comment($comment->comment_parent);
+        $parent_comment_author_email = $parent_comment->comment_author_email;
+        // 返信が自分でなければ送信
+        if ($comment_author_email != $parent_comment_author_email) {
+            $subject = '【看護教育力UP↑コミュニティ】あなたのコメントに返信がありました';
+            $message = "投稿したコメントに返信がありました。下記よりご確認ください。\n";
+            $message .= get_permalink($post->ID) . "\n";
+            $parent_comment_author_info = get_user_by( 'email', $parent_comment_author_email );
+            $parent_comment_author_id = $parent_comment_author_info->ID;
+            $user_alert_checkbox = wpmem_get_user_meta($parent_comment_author_id, 'user_alert_checkbox', true);
+            if (preg_match('/コメント投稿状態/', $user_alert_checkbox)) {
+                // ▼ 20240205 fsta ikawa update
+                // wp_mail($parent_comment_author_email, $subject, $message);
+                if (check_user_expireddate_by_user_id($parent_comment_author_id)) {
+                    wp_mail($parent_comment_author_email, $subject, $message);
+                }
+                // ▼ 20240205 fsta ikawa update
+            }
+        }
+    }
+
+    // 全ユーザーにメール送信（お気に入りテーマに入れている場合）
+    $users = get_users();
+    foreach ( $users as $user ) {
+        // 自分が書いたのであれば除外
+        $user_favorite = get_user_favorites($user->ID);
+        // お気に入りに入っている場合と自分が書いたのではないとき
+        if (in_array($post->ID, $user_favorite) && $user->ID != $comment_author_id) {
+            if ($comment->comment_parent) {
+                $subject = '【看護教育力UP↑コミュニティ】返信投稿のお知らせ';
+                $message = 'お気に入りテーマ記事に新しい返信投稿がありました。' . "\n";
+                $message .= '下記よりご確認ください。' . "\n";
+                $message .= get_permalink($post->ID) . "\n";
+            } else {
+                $subject = '【看護教育力UP↑コミュニティ】コメント投稿のお知らせ';
+                $message = 'お気に入りテーマ記事に新しいコメントが投稿されました。' . "\n";
+                $message .= '下記よりご確認ください。' . "\n";
+                $message .= get_permalink($post->ID) . "\n";
+            }
+            $user_alert_checkbox = wpmem_get_user_meta($user->ID, 'user_alert_checkbox', true);
+            if (preg_match('/コメント新着/', $user_alert_checkbox)) {
+                // ▼ 20240205 fsta ikawa update
+                // wp_mail($user->user_email, $subject, $message);
+                if (check_user_expireddate_by_user_id($user->ID)) {
+                    wp_mail($user->user_email, $subject, $message);
+                }
+                // ▼ 20240205 fsta ikawa update
+            }
+        }
+    }
+}
+
+
+// コメントが承認されたときに実行されるアクションフック
+add_action('edit_comment', 'send_email_on_comment_deny', 10, 2);
+function send_email_on_comment_deny($comment_id, $data) {
+    // コメントが否認された場合のみ処理を実行
+    $comment_deny_flag = get_field('comment_delete_check', 'comment_'.$comment_id);
+    if (!$comment_deny_flag) {
+        return;
+    }
+
+    // コメントデータを取得
+    $comment = get_comment($comment_id);
+
+    // 記事の投稿者の情報を取得
+    $post = get_post($comment->comment_post_ID);
+    $author_email = get_the_author_meta('user_email', $post->post_author);
+
+    // コメントの投稿者のメールアドレスを取得
+    $comment_author_email = $comment->comment_author_email;
+    $comment_author_info = get_user_by( 'email', $comment_author_email );
+    $comment_author_id = $comment_author_info->ID;
+
+    // メールの内容を設定
+    if ($comment->comment_parent) {
+        $subject = '【看護教育力UP↑コミュニティ】返信投稿が取り下げられました';
+        $message = "下記理由によって返信投稿が取り下げられました。ご了承ください。\n"
+                  . get_field('comment_delete_reason','comment_'.$comment_id);
+    } else {
+        $subject = '【看護教育力UP↑コミュニティ】コメントが取り下げられました';
+        $message = "下記理由によってコメントが取り下げられました。\n"
+                  . get_field('comment_delete_reason','comment_'.$comment_id);
+    }
+
+    // 記事の投稿者とコメントの投稿者にメールを送信
+    $user_alert_checkbox = wpmem_get_user_meta($comment_author_id, 'user_alert_checkbox', true);
+    if (preg_match('/コメント投稿状態/', $user_alert_checkbox)) {
+        // ▼ 20240205 fsta ikawa update
+        // wp_mail($comment_author_email, $subject, $message);
+        if (check_user_expireddate_by_user_id($comment_author_id)) {
+            wp_mail($comment_author_email, $subject, $message);
+        }
+        // ▼ 20240205 fsta ikawa update
+    }
+    // ▼ 20240205 fsta ikawa update
+    // wp_mail($author_email, $subject, $message);
+    if (check_user_expireddate_by_user_id($post->post_author)) {
+        wp_mail($author_email, $subject, $message);
+    }
+    // ▼ 20240205 fsta ikawa update
+
+  }
+
+
+//パスワードリセットの文言変更
+add_filter( 'wpmem_forgot_link_str', 'my_forgot_link_str', 10, 2 );
+function my_forgot_link_str( $str, $link ) {
+    return "パスワードを忘れた場合<a href=\"$link\" target=\"blank\">パスワード再発行</a>";
+}
+
+
+//パスワードリセットの通知メールを管理者に届けない
+function disable_password_change_email() {
+  remove_action( 'after_password_reset', 'wp_password_change_notification' );
+}
+add_action( 'init', 'disable_password_change_email' );
+
+
+// 投稿が合ったときの処理
+function send_email_on_new_post( $new_status, $old_status, $post ) {
+    if (
+        $new_status != 'publish'
+        || $old_status == 'publish'
+    ) {
+        return;
+    }
+  // 投稿タイプに基づいてメールの内容を設定
+  $email_addresses = array();
+  // 通常の投稿の場合のメール設定
+  if ( $post->post_type == 'news' ) {
+      $subject = '【看護教育力UP↑コミュニティ】お知らせ新着';
+      $message = '新しいお知らせがあります。下記よりご確認ください。' . "\n";
+      $message .= get_permalink($post->ID) . "\n";
+
+      $news_user_list = get_field('select_user', $post->ID);
+
+      // お知らせを許可している全ユーザーのメールアドレスを取得
+      $users = get_users();
+      foreach ( $users as $user ) {
+          if ($news_user_list) {
+              $user_alert_checkbox = wpmem_get_user_meta($user->ID, 'user_alert_checkbox', true);
+              if (preg_match('/お知らせ/', $user_alert_checkbox) && in_array($user->ID, $news_user_list)) {
+                    // $email_addresses[] = $user->user_email;
+                    // メールを送信
+                    // ▼ 20240205 fsta ikawa update
+                    // wp_mail( $user->user_email, $subject, $message );
+                    if (check_user_expireddate_by_user_id($user->ID)) {
+                        wp_mail( $user->user_email, $subject, $message );
+                    }
+                    // ▼ 20240205 fsta ikawa update
+              }
+          } else {
+              $user_alert_checkbox = wpmem_get_user_meta($user->ID, 'user_alert_checkbox', true);
+              if (preg_match('/お知らせ/', $user_alert_checkbox)) {
+                    // メールを送信
+                    // ▼ 20240205 fsta ikawa update
+                    // wp_mail( $user->user_email, $subject, $message );
+                    if (check_user_expireddate_by_user_id($user->ID)) {
+                        wp_mail( $user->user_email, $subject, $message );
+                    }
+                    // ▼ 20240205 fsta ikawa update
+              }
+          }
+      }
+      // $message .= implode(',', $news_user_list) . "\n";
+      // $message .= $user_alert_checkbox . "\n";
+      // $message .= implode(',', $email_addresses) . "\n";
+  } else if ( $post->post_type == 'post' ) {
+      $subject = '【看護教育力UP↑コミュニティ】テーマ新着';
+      $message = '新しいテーマ記事が配信されました。下記よりご確認ください。' . "\n";
+      $message .= get_permalink($post->ID) . "\n";
+
+      // お知らせを許可している全ユーザーのメールアドレスを取得
+      $users = get_users();
+      foreach ( $users as $user ) {
+          $user_alert_checkbox = wpmem_get_user_meta($user->ID, 'user_alert_checkbox', true);
+          if (preg_match('/テーマ新着/', $user_alert_checkbox)) {
+                // メールを送信
+                // ▼ 20240205 fsta ikawa update
+                // wp_mail( $user->user_email, $subject, $message );
+                if (check_user_expireddate_by_user_id($user->ID)) {
+                    wp_mail( $user->user_email, $subject, $message );
+                }
+                // ▼ 20240205 fsta ikawa update
+          }
+
+      }
+  }
+
+}
+// add_action( 'new_to_publish', 'send_email_on_new_post', 10, 3 );
+// add_action( 'pending_to_publish', 'send_email_on_new_post', 10, 3 );
+// add_action( 'draft_to_publish', 'send_email_on_new_post', 10, 3 );
+// add_action( 'auto-draft_to_publish', 'send_email_on_new_post', 10, 3 );
+// add_action( 'future_to_publish', 'send_email_on_new_post', 10, 3 );
+// add_action( 'private_to_publish', 'send_email_on_new_post', 10, 3 );
+// add_action( 'publish_news', 'send_email_on_new_post', 10, 3 );
+add_action( 'transition_post_status', 'send_email_on_new_post', 10, 3 );
+
+
+//wp_list_commentsコールバック
+function wp_list_comments_default_callback($comment, $args, $depth) {
+  // コメントの表示に関するデフォルトのマークアップがここに含まれます
+  $comment_id = get_comment_ID();
+  $school_show_hidden = get_user_meta($comment->user_id, 'school_show_hidden', true);
+  $user_school_name_select = get_user_meta($comment->user_id, 'user_school_name_select', true);
+  $position_show_hidden = get_user_meta($comment->user_id, 'position_show_hidden', true);
+  $user_position = get_user_meta($comment->user_id, 'user_position', true);
+  $area_show_hidden = get_user_meta($comment->user_id, 'area_show_hidden', true);
+  $user_area = get_user_meta($comment->user_id, 'user_area', true);
+
+  $user_nickname = get_user_meta($comment->user_id, 'user_nickname', true);
+  $name_show_hidden = get_user_meta($comment->user_id, 'name_show_hidden', true);
+
+  $last_name = get_user_meta($comment->user_id, 'last_name', true);
+  $first_name = get_user_meta($comment->user_id, 'first_name', true);
+  
+  $school_name = show_school_name_by_shcool_id($user_school_name_select);
+  ?>
+  <li <?php comment_class(); ?> id="comment-<?php comment_ID(); ?>">
+      <div id="comment-<?php comment_ID(); ?>" class="comment-body">
+              <div class="comment_author vcard">
+                  <?php
+                  echo get_avatar($comment, 50);
+                  ?>
+              </div><!-- .comment-author -->
+
+              <div class="comment_arrow_box">
+              <div class="comment-meta commentmetadata">
+              <p class="comment_time"><?php comment_date(); ?></p>
+              <p class="name">
+        <?php if ($name_show_hidden === '公開') :?>
+          <?php echo esc_html($last_name); ?>  <?php echo esc_html($first_name); ?>
+            <!-- <?php echo esc_html($comment->comment_author); ?> -->
+        <?php else:?>
+            <?php echo esc_html($user_nickname); ?>
+        <?php endif;?>
+
+            <?php if ($school_show_hidden === '公開') :?>
+                <p class="school_name"><?php echo esc_html($school_name); ?></p>
+            <?php endif;?>
+            <?php if ($position_show_hidden === '公開') :?>
+                <p class="position"><?php echo esc_html($user_position); ?></p>
+            <?php endif;?>
+            <?php if ($area_show_hidden === '公開') :?>
+                <p class="area"><?php echo esc_html($user_area); ?></p>
+            <?php endif;?>
+
+            </div><!-- .comment-metadata -->
+
+              <?php if ('0' == $comment->comment_approved) : ?>
+                  <p class="comment-awaiting-moderation"><?php _e('Your comment is awaiting moderation.'); ?></p>
+              <?php endif; ?>
+          <div class="comment-content">
+              <?php comment_text(); ?>
+          </div><!-- .comment-content -->
+
+          <div class="single_button_box ver_comment_btn">
+          <?php echo do_shortcode('[wp_ulike for="comment" slug="comment" id="'.$comment_id.'" style="wpulike-heart" wrapper_class="reaction_btn nice_btn"]') ?>
+          <?php echo do_shortcode('[wp_ulike for="comment" slug="comment" id="100000000'.$comment_id.'" style="wpulike-heart" wrapper_class="reaction_btn favorite_btn"]') ?>
+
+        </div>
+
+        </div>
+        <!-- /.comment_arrow_box -->
+
+      </div><!-- .comment-body -->
+      <div class="reply comment-reply">
+              <?php
+              comment_reply_link(
+                  array_merge(
+                      $args,
+                      array(
+                          'add_below' => 'div-comment',
+                          'depth'     => $depth,
+                          'max_depth' => $args['max_depth'],
+                          'reply_text' => '返信コメントを入力<br class="sp_only">(入力フォームへ移動します)',
+                          )
+                  )
+              );
+              ?>
+          </div><!-- .comment-reply -->
+  <?php
+}
+
+// ▼ fsta ikawa 20240116
+
+// 会員登録編集時学校マスタバリデート
+function add_school_validate( $fields ) {
+    global $wpmem_themsg;
+    global $wpdb;
+
+    // fsta ikawa 20240221 追加
+    // 編集の場合、権限が「管理者」「編集者」「寄稿者」だったらチェックなし
+    if (is_user_logged_in()) {
+        $user = wp_get_current_user();
+        if (in_array('administrator', $user->roles)
+            || in_array('editor', $user->roles)
+            || in_array('contributor', $user->roles)) {
+                return;
+        }
+    }
+
+    $msg = '新規登録には、教科書またはBeNs.の採用が必須となります。<br>誠に申し訳ございませんが、現在ご利用いただけません。';
+
+    $schoolId = $fields['user_school_name_select'];
+    $results = $wpdb->get_results( "SELECT * FROM mkc_school_adoptions where school_id = '".$schoolId."'");
+    // 有効期限が過ぎているか、不採用ではないかチェック
+    if (!$results || count($results) <= 0) {
+        $wpmem_themsg = $msg;
+    } elseif ($results && count($results) > 0) {
+        $errorFlag = false;
+        if (!$results[0]->expired_date || $results[0]->expired_date < date('Y-m-d')) {
+            $errorFlag = true;
+        } elseif ($results[0]->adopted_kbn != 1 && $results[0]->adopted_kbn != 4) {
+            $errorFlag = true;
+        }
+        if ($errorFlag) {
+            $wpmem_themsg = $msg;
+        }
+    }
+}
+add_action( 'wpmem_pre_register_data', 'add_school_validate' );
+add_action( 'wpmem_pre_update_data', 'add_school_validate' );
+
+// ユーザ新規登録時にユーザ情報に有効期限を追加する
+function register_user_expired_date( $fields ) {
+    global $wpdb;
+
+    $meta  = 'user_expired_date';
+    $schoolId = $fields['user_school_name_select'];
+    $results = $wpdb->get_results( "SELECT * FROM mkc_school_adoptions where school_id = '".$schoolId."'");
+    if ($results && count($results) > 0) {
+        if ($results[0]->expired_date && ($results[0]->adopted_kbn == 1 || $results[0]->adopted_kbn == 4)) {
+            $value = $results[0]->expired_date;
+            update_user_meta( $fields['ID'], $meta, $value );
+        }
+    }
+
+    return;
+}
+add_action( 'wpmem_post_register_data', 'register_user_expired_date' );
+
+// ユーザ情報編集時に学校が変更された場合は有効期限を更新する
+function update_user_expired_date( $fields) {
+    global $wpdb;
+
+    // 学校ID
+    $schoolId =  get_user_meta($fields['ID'], 'user_school_name_select', true);
+
+    // 学校IDが異なる場合、有効期限を更新
+    if ($fields['user_school_name_select'] != $schoolId) {
+        $updateExpiredDate = null;
+        $meta  = 'user_expired_date';
+        $results = $wpdb->get_results( "SELECT * FROM mkc_school_adoptions where school_id = '".$fields['user_school_name_select']."'");
+        if ($results && count($results) > 0) {
+            if ($results[0]->expired_date && ($results[0]->adopted_kbn == 1 || $results[0]->adopted_kbn == 4)) {
+                $updateExpiredDate = $results[0]->expired_date;
+            }
+        }
+        update_user_meta( $fields['ID'], $meta, $updateExpiredDate );
+    }
+
+	return;
+}
+add_action( 'wpmem_pre_update_data', 'update_user_expired_date', 10, 2);
+
+// 管理画面でのユーザ情報編集で、学校が変更されたとき、有効期限も更新する
+function update_user_expired_date_admin_page( $user_id) {
+    global $wpdb;
+
+    // 学校ID
+    $schoolId =  get_user_meta($user_id, 'user_school_name_select', true);
+
+    // 学校IDが異なる場合、有効期限を更新
+    if ($_POST['user_school_name_select'] != $schoolId) {
+        $updateExpiredDate = null;
+        $meta  = 'user_expired_date';
+        $results = $wpdb->get_results( "SELECT * FROM mkc_school_adoptions where school_id = '".$_POST['user_school_name_select']."'");
+        if ($results && count($results) > 0) {
+            if ($results[0]->expired_date && ($results[0]->adopted_kbn == 1 || $results[0]->adopted_kbn == 4)) {
+                $updateExpiredDate = $results[0]->expired_date;
+            }
+        }
+        $_POST[$meta] = $updateExpiredDate;
+    }
+
+	return;
+}
+add_action( 'profile_update', 'update_user_expired_date_admin_page');
+
+// 学校マスタをuser_school_name_selectのoptionに設定
+function set_school_options( $rows, $tag ) {
+    global $wpdb;
+
+    $values = ['選択してください|'];
+    $results = $wpdb->get_results( "SELECT * FROM mkc_schools");
+    if ($results && count($results) > 0) {
+        foreach ($results as $row) {
+            $values[] = esc_html($row->school_name).'|'.esc_attr($row->school_id);
+        }
+    }
+    foreach ($rows as $key => &$row) {
+        if ($key == 'user_school_name_select') {
+            $row['values'] = $values;
+            $row[7] = $values;
+        }
+    }
+    return $rows;
+}
+add_filter( 'wpmem_fields', 'set_school_options', 10, 2 );
+
+// 学校名表示ショートコード
+function show_school_name() {
+    global $wpdb;
+
+    $userData = wp_get_current_user();
+    $userId = $userData->ID;
+    $schoolId = get_user_meta($userId, 'user_school_name_select', true);
+
+    if ($schoolId) {
+        $results = $wpdb->get_results( "SELECT * FROM mkc_schools where school_id = '".$schoolId."'");
+        if ($results && count($results) > 0) {
+            return $results[0]->school_name;
+        }
+    }
+    return '';
+}
+add_shortcode('show_school_name', 'show_school_name');
+
+// 学校名表示ショートコード ※wp_queryで回す用
+function show_school_name_02() {
+    global $wpdb;
+
+    $userData = new WP_User( get_the_author_meta( 'ID' ) );
+    $userId = get_the_author_meta('ID');
+    $schoolId = get_user_meta($userId, 'user_school_name_select', true);
+
+    if ($schoolId) {
+        $results = $wpdb->get_results( "SELECT * FROM mkc_schools where school_id = '".$schoolId."'");
+        if ($results && count($results) > 0) {
+            return $results[0]->school_name;
+        }
+    }
+    return '';
+}
+add_shortcode('show_school_name_02', 'show_school_name_02');
+
+
+// ▼ fsta ikawa update 20240130
+// 学校名表示 by 学校ID
+function show_school_name_by_shcool_id($attr) {
+    global $wpdb;
+
+    if ($attr[0]) {
+        $results = $wpdb->get_results( "SELECT * FROM mkc_schools where school_id = '".$attr[0]."'");
+        if ($results && count($results) > 0) {
+            return $results[0]->school_name;
+        }
+    }
+    return '';
+}
+add_shortcode('show_school_name_by_shcool_id', 'show_school_name_by_shcool_id');
+// ▲ fsta ikawa update 20240130
+
+// 会員情報に有効期限、初回登録日（採用日）、採用教科書一覧を表示
+function show_expired_date_and_adopted_info( $rows, $tag ) {
+    global $wpdb;
+
+    if ($tag == 'edit') {
+        $userData = wp_get_current_user();
+        $userId = $userData->ID;
+        $schoolId = get_user_meta($userId, 'user_school_name_select', true);
+
+        $field = '<h3>初回登録</h3> ';
+        $adoptions = $wpdb->get_results( "SELECT * FROM mkc_school_adoptions where school_id = '".$schoolId."'");
+        if ($adoptions && count($adoptions) > 0) {
+            $field .= $adoptions[0]->adopted_date;
+        }
+        $field .= '<br>';
+        $field .= '<br>';
+
+        $field .= '<h3>有効期限</h3>';
+        $userExpiredDate = get_user_meta($userId, 'user_expired_date', true);
+        if ($userExpiredDate) {
+            $field .= $userExpiredDate;
+        }
+
+        // $field .= '<br>';
+        // $field .= '<br>';
+
+        // $field .= '<h3>採用商品</h3>';
+        // $items = $wpdb->get_results( "SELECT * FROM mkc_school_items where school_id = '".$schoolId."'");
+        // if ($items && count($items) > 0) {
+        //     $field .= '<ul style="list-style: none;">';
+        //     foreach ($items as $item) {
+        //         $field .= '<li>'.$item->item_name.'</li>';
+        //     }
+        //     $field .= '</ul>';
+        // }
+
+        $adopted_date['info'] = array(
+            'order' => '',
+            'meta' => '',
+            'type' => '',
+            'value' => '',
+            'row_before' => '<div class="form_custom_flex">',
+            'label' => '',
+            'field_before' => '<div class="div_text">',
+            'field' => $field,
+            'field_after' => '</div>',
+            'row_after' => '</div>'
+        );
+        $rows = wpmem_array_insert( $rows, $adopted_date, 'user_alert_checkbox', 'after');
+    }
+    return $rows;
+}
+add_filter( 'wpmem_register_form_rows', 'show_expired_date_and_adopted_info', 10, 2 );
+
+// 管理画面ログインページか否か？
+function is_login_page() {
+    return in_array($GLOBALS['pagenow'], array('wp-login.php', 'wp-register.php'));
+}
+// ログイン失敗エラーメッセージに有効期限の文言に変更。
+function expiredate_login_failed( $str )
+{
+    $str ='看護教育力UP↑コミュニティ」先行オープン期間は<br>2024年1月31日をもって終了となりました。<br>誠に申し訳ございませんが、現在ご利用いただけません。';
+	return $str;
+}
+// 有効期限のログインバリデート
+function check_expiredate( $user) {
+    if ( is_wp_error( $user ) ) {
+        return $user;
+    }
+    if (!wp_check_password($_POST['pwd'], $user->user_pass, $user->id)) {
+        return $user;
+    }
+
+    $userExpiredDate = wpmem_get_user_meta($user->id, 'user_expired_date');
+    if (!is_login_page()) {
+        if (!$userExpiredDate|| $userExpiredDate < date('Y-m-d')) {
+            $message = esc_html__( 'exceed expired date', 'wp-members');
+            add_filter('wpmem_login_failed', 'expiredate_login_failed');
+            return new WP_Error( 'login_failed', $message );
+        }
+    }
+    return $user;
+}
+add_filter( 'wp_authenticate_user', 'check_expiredate', 99, 3 );
+// ▲ fsta ikawa 20240116
+
+// ▼ fsta ikawa 20240202 
+add_filter( 'wpmem_email_shortcodes', function ( $shortcodes, $tag, $user_id ) {    
+    global $wpdb;
+
+    $schoolId = get_user_meta($user_id, 'user_school_name_select', true);
+
+    $schoolName = '';
+
+    if ($schoolId) {
+        $results = $wpdb->get_results( "SELECT * FROM mkc_schools where school_id = '".$schoolId."'");
+        if ($results && count($results) > 0) {
+            $schoolName = $results[0]->school_name;
+        }
+    }
+    
+    // This is an example of a shortcode replaced with a user meta field (by user ID).
+    $shortcodes['email_show_school_name'] = $schoolName;
+    
+    return $shortcodes;
+    
+}, 10, 3 );
+// ▲ fsta ikawa 20240202
+
+// ▼ fsta ikawa 20240205 
+// 指定ユーザIDからのユーザ有効期限チェック
+function check_user_expireddate_by_user_id($userId) {
+
+    $userExpiredDate = get_user_meta($userId, 'user_expired_date', true);
+    
+    if ($userExpiredDate && $userExpiredDate >= date('Y-m-d')) {
+        return true;
+    }
+
+    return false;
+}
+// ▲ fsta ikawa 20240205
+?>

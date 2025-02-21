@@ -1,0 +1,66 @@
+<footer class="footer">
+  <div class="main_width">
+    <?php if( is_user_logged_in() || !is_page_template(array('page-no_login.php','page-register_complete.php'))) : ?>
+      <div class="img">
+        <img src="<?php echo esc_url(site_url('/')); ?>img/common/logo.svg" alt="看護教育力UP↑コミュニティ">
+      </div>
+      <!-- /.img -->
+
+      <ul class="nav_list">
+        <!-- <li>
+          <a href="<?php echo esc_url(home_url('/')); ?>">よくあるご質問</a>
+        </li> -->
+        <li>
+          <a href="<?php echo esc_url(home_url('/')); ?>terms/">利用規約</a>
+        </li>
+        <li>
+          <a href="https://business.form-mailer.jp/fms/fa8b45c0209306" target="_blank" rel="noopener">お問い合わせ</a>
+        </li>
+      </ul>
+      <!-- /.nav_list -->
+    <?php endif; ?>
+    <p class="copyright">copyright&copy; 1996 - 2023 MEDICUS SHUPPAN. Publishers Co., Ltd.All Rights Reserved.</p>
+  </div>
+  <!-- /.main_width -->
+</footer>
+
+<?php if(is_front_page()): ?>
+
+  <div id="js_modal" class="open_modal">
+    <div class="modal_guide_box">
+      <div class="ico_close_btn modal_close">
+        <img src="<?php echo esc_url(site_url('/')); ?>img/pop-up/btn-close.svg" alt="">
+      </div>
+      <div class="modal_inner">
+        <p class="ttl">看護教育力UP↑コミュニティへ<br>ようこそ！</p>
+        <div class="txt_box">
+          <p>本サービスをご活用いただくために<br>「看護教育力UP↑コミュニティとは」を<br>ご覧ください。</p>
+        </div>
+        <div class="btn_box arrow_btn">
+          <a href="<?php echo esc_url(home_url('/')); ?>guide/">看護教育力UP↑コミュニティとは</a>
+        </div>
+        <div class="check">
+          <label for="check"><input type="checkbox" id="check">次回からこのメッセージを表示しない</label>
+        </div>
+        <button class="close_btn modal_close">閉じるボタン</button>
+      </div>
+      <!-- /.modal_inner -->
+    </div>
+    <!-- /.modal_guide_inner -->
+
+  </div>
+  <!-- /#js_modal_open -->
+
+
+
+
+<?php endif; ?>
+
+
+<?php wp_footer(); ?>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.2/js/select2.min.js"></script>
+<script type="text/javascript" src="<?php echo esc_url(site_url('/')); ?>js/function.js"></script>
+<script type="text/javascript" src="<?php echo esc_url(site_url('/')); ?>js/wp-member.js"></script>
+</body>
+</html>
